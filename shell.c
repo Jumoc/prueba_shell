@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 
 /**
@@ -119,6 +120,26 @@ char **divide_line(char *line, char *delim)
 }
 
 /**
+ * *_strcpy - prints n numbers of an array
+ *
+ * @dest: string to be printed
+ * @src: number of elements to be printed
+ *
+ * Return: The string copied
+*/
+char *_strcpy(char *dest, char *src)
+{
+	char *firstValue = dest;
+	for (; *src != '\0'; src++)
+	{
+		*dest = *src;
+		dest++;
+	}
+	*dest = '\0';
+	return (firstValue);
+}
+
+/**
  *	*_getenv - search string
  *	@name: String to search
  *	Return: Pointer to the string
@@ -128,6 +149,7 @@ char *_getenv(const char *name)
 {
 	char *ptr = NULL;
 	char **list = NULL;
+	int size = 0;
 	int i = 0, j = 0;
 
 	list = __environ;
@@ -140,27 +162,31 @@ char *_getenv(const char *name)
 
 		if (name[j] == '\0' && list[i][j] == '=')
 		{
-			ptr = list[i];
+			/*liberar malloc*/
+			size = string_size(list[i]);
+			ptr = malloc(size + 1);
+			ptr = _strcpy(ptr, list[i]);
 			return (ptr);
 		}
-
 	}
 
 	if (name[j] == '\0' && list[i][j] == '=')
-		ptr = list[i];
-	else
-		ptr = NULL;
+	{
+		size = string_size(list[i]);
+		ptr = malloc(size + 1);
+		_strcpy(ptr, list[i]);
+	}
 
 	return (ptr);
 }
 
 /**
- *	*_search - search string
+ *	divide_path - search
  *	@name: String to search
  *	Return: Pointer to the string
  */
 
-char **_search(char *str)
+char **divide_path(char *str)
 {
 	char *_env = NULL;
 	char **PATH = NULL;
@@ -170,7 +196,7 @@ char **_search(char *str)
 	_env = _getenv(str);
 
 	if (_env == NULL)
-		printf("La variable de entorno no Existe\n");
+		perror(NULL);
 
 	else
 	{
@@ -182,15 +208,52 @@ char **_search(char *str)
 		 * liberar
 		 */
 		PATHS = divide_line(PATH[1], ":");
-		while(PATHS[i] != NULL)
-		{
-			printf("token posicion[%d] %s\n", i, PATHS[i]);
-			i++;
-		}
-		printf("token posicion[%d] %s\n", i, PATHS[i]);
 	}
-	free(PATHS);
 	return (PATHS);
+}
+
+char *concat_path(char *command, int index)
+{
+	char **paths = NULL;
+	char *concat = NULL;
+	int command_size = 0, path_size = 0, paths_size = 0;
+	int i = 0, j = 0;
+
+	paths = divide_path("PATH");
+
+	while (paths[paths_size] != NULL)
+	{
+		paths_size++;
+	}
+
+	if (paths_size < index)
+		return (NULL);
+
+	if (command)
+		command_size = string_size(command);
+
+	if (paths[index])
+		path_size = string_size(paths[index]);
+
+		/*liberar concat*/
+
+	concat = malloc((path_size + command_size + 2) * sizeof(char));
+
+	while (i < path_size)
+	{
+		concat[i] = paths[index][i];
+		i++;
+	}
+	concat[i] = '/';
+	i++;
+	while (j < command_size)
+	{
+		concat[i] = command[j];
+		j++;
+		i++;
+	}
+	concat[i] = '\0';
+	return (concat);
 }
 
 /**
@@ -203,32 +266,50 @@ void start_loop(void)
 {
 	char *line = NULL;
 	char **arguments = NULL;
-	int i = 0;
-	int pid, status;
+	char *path = NULL;
+	int i;
+	int pid, status, pr, path_status;
+	struct stat *statbuf;
 
 	while (1)
 	{
-
+		i = 0;
 		line = prompt("prueba shell (&) ");
 		arguments = divide_line(line, " ");
 
-		while (arguments[i] != NULL)
-		{
-			printf("%s\n", arguments[i]);
-			i++;
-		}
+		pr = stat(arguments[0], statbuf);
 
+		if (pr == -1)
+		{
+			/*
+			 *	hacer concatenación
+			*/
+			do 
+			{
+				path = concat_path(arguments[0], i);
+				path_status = stat(path, statbuf);
+
+				if(path_status == 0)
+				{
+					break;
+				}
+				i++;
+			}
+			while (path != NULL);
+		} else {
+			path = arguments[0];
+		}
+		
 		pid = fork();
 
 		if (pid == 0)
 		{
-			execve(arguments[0], arguments, NULL);
+			execve(path, arguments, NULL);
 		} else
 		{
 			wait(&status);
 		}
 	}
-
 }
 
 /**
@@ -241,9 +322,6 @@ void start_loop(void)
  */
 int main(int argv, char **argc, char **env)
 {
-	char **paths;
-	
-	paths = _search("PATH");
-	//start_loop();
+	start_loop();
 	return (0);
 }
